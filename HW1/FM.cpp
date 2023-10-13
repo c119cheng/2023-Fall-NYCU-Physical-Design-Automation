@@ -5,7 +5,18 @@ Partitioner::Partitioner(){
 }
 
 Partitioner::~Partitioner(){
+    // cout<<"destructor"<<endl;
+    for(int i=0;i<=2*P_MAX;i++){
+        set_A[i] = nullptr;
+        set_B[i] = nullptr;
+    }
 
+    for(int i=0;i<cells;i++){
+        delete cell_ptr[i];
+        cell_ptr[i] = nullptr;
+    }
+    cell_ptr.clear();
+    // cout<<"finish destructor"<<endl;
 }
 
 void Partitioner::load(char *file_name){
@@ -102,18 +113,18 @@ void Partitioner::load(char *file_name){
 }
 
 void Partitioner::solve(){
-    cout<<"start solve"<<endl;
+    // cout<<"start solve"<<endl;
     // declare space
 
-    set_A = vector<unordered_set<int>>(2*P_MAX+1);
-    set_B = vector<unordered_set<int>>(2*P_MAX+1);
+    set_A = vector<node*>(2*P_MAX+1);
+    set_B = vector<node*>(2*P_MAX+1);
 
     step_gain = vector<int>(cells);
     step_move = vector<int>(cells);
     min = ceil((1-balance_factor)/2.0 * cells);
     max = floor((1+balance_factor)/2.0 * cells);
-    cout<<"min = "<<min<<endl;
-    cout<<"max = "<<max<<endl;
+    // cout<<"min = "<<min<<endl;
+    // cout<<"max = "<<max<<endl;
     net_A_size = vector<int>(nets);
     net_B_size = vector<int>(nets);
 
@@ -121,6 +132,16 @@ void Partitioner::solve(){
     cell_gain = vector<int>(cells);
     cell_side = vector<bool>(cells);
     cell_old_side = vector<bool>(cells);
+
+
+    // make cell node ptr
+    cell_ptr = vector<node*>(cells);
+    for(int i=0;i<cells;i++){
+        cell_ptr[i] = new node;
+        cell_ptr[i]->val = i;
+        cell_ptr[i]->prev = nullptr;
+        cell_ptr[i]->next = nullptr;
+    }
 
     // start solve
     int best_sol = nets;
@@ -136,13 +157,14 @@ void Partitioner::solve(){
         for(int i=0;i<cells;i++){
             cell_old_side[i] = cell_side[i];
         }
-        cout<<"min = "<<min<<endl;
-        cout<<"max = "<<max<<endl;
-        cout<<"size_A = "<<size_A<<endl;
-        cout<<"size_B = "<<size_B<<endl;
+        // cout<<"min = "<<min<<endl;
+        // cout<<"max = "<<max<<endl;
+        // cout<<"size_A = "<<size_A<<endl;
+        // cout<<"size_B = "<<size_B<<endl;
 
         // start FM algorithm
         stop_FM = false;
+        int attemp_time = 0;
         while(!stop_FM){
 
             for(int i=0;i<nets;i++){
@@ -155,17 +177,20 @@ void Partitioner::solve(){
                         net_A_size[i]++;
                 }
             }
-            cout<<"get gain"<<endl;
+            // cout<<"get gain"<<endl;
             get_all_gain();
-            cout<<"make bucket"<<endl;
+            // cout<<"make bucket"<<endl;
             make_bucket();
-            cout<<"FM"<<endl;
+            // cout<<"FM"<<endl;
             FM();
+            if(attemp_time++ >= 100)
+                break;
         }
 
         // compare to best solution
         getCuts();
-        cout<<"Cuts = "<<cut<<endl;
+        // cout<<"Cuts = "<<cut<<endl;
+
         bool balance = (size_A >= min && size_A <= max);
         if(cut < best_sol && balance){
             best_sol = cut;
@@ -190,7 +215,7 @@ void Partitioner::solve(){
 }
 
 void Partitioner::initial_partition(int in=0){
-    cout<<"start initial partition"<<endl;
+    // cout<<"start initial partition"<<endl;
     vector<bool> tmp(cells, false); // cell already pattitioned
     for(int i=in;i<nets;i++){
         bool side_A = false;
@@ -222,7 +247,7 @@ void Partitioner::initial_partition(int in=0){
 
         for(const auto& cell : net_list[i]){
             if(!tmp[cell]){
-                if(side && size_B <= max || size_A >= max){
+                if((side && size_B <= max) || size_A >= max){
                     cell_side[cell] = 1;
                     size_B++;
                 }
@@ -265,7 +290,7 @@ void Partitioner::initial_partition(int in=0){
 
         for(const auto& cell : net_list[i]){
             if(!tmp[cell]){
-                if(side && size_B <= max || size_A >= max){
+                if((side && size_B <= max) || size_A >= max){
                     cell_side[cell] = 1;
                     size_B++; 
                 }
@@ -331,22 +356,30 @@ void Partitioner::get_all_gain(){
 
 void Partitioner::make_bucket(){
     for(int i=0;i<=2*P_MAX;i++){
-        set_A[i].clear();
-        set_B[i].clear();
+        set_A[i] = nullptr;
+        set_B[i] = nullptr;
     }
 
     set_B_ptr = 0;
     set_A_ptr = 0;
     for(int i=0;i<cells;i++){
+        node *cur_cell = cell_ptr[i];
+        cur_cell->prev = nullptr;
         if(cell_side[i]){
             int idx = cell_gain[i] + P_MAX;
-            set_B[idx].insert(i);
+            cur_cell->next = set_B[idx];
+            if(set_B[idx] != nullptr)
+                set_B[idx]->prev = cur_cell;
+            set_B[idx] = cur_cell;
             if(set_B_ptr < idx)
                 set_B_ptr = idx;
         }
         else{
             int idx = cell_gain[i] + P_MAX;
-            set_A[idx].insert(i);
+            cur_cell->next = set_A[idx];
+            if(set_A[idx] != nullptr)
+                set_A[idx]->prev = cur_cell;
+            set_A[idx] = cur_cell;
             if(set_A_ptr < idx)
                 set_A_ptr = idx;
         }
@@ -360,10 +393,10 @@ void Partitioner::FM(){
     int max_gain = 0;
     int max_idx = 0;
     for(int lock_num=0;lock_num<iter_time;lock_num++){
-        while(set_A_ptr >= 0 &&set_A[set_A_ptr].empty()){
+        while(set_A_ptr >= 0 &&set_A[set_A_ptr] == nullptr){
             set_A_ptr--;
         }
-        while(set_B_ptr >= 0 &&set_B[set_B_ptr].empty()){
+        while(set_B_ptr >= 0 &&set_B[set_B_ptr] == nullptr){
             set_B_ptr--;
         }
         int cell;
@@ -373,26 +406,34 @@ void Partitioner::FM(){
         }
         else if(set_A_ptr < 0){
             // move from B to A
-            cell = *set_B[set_B_ptr].begin();
-            set_B[set_B_ptr].erase(cell);
+            cell = set_B[set_B_ptr]->val;
+            set_B[set_B_ptr] = set_B[set_B_ptr]->next;
+            if(set_B[set_B_ptr] != nullptr)
+                set_B[set_B_ptr]->prev = nullptr;
             size_A++;
         }
         else if(set_B_ptr < 0){
             // move from A to B
-            cell = *set_A[set_A_ptr].begin();
-            set_A[set_A_ptr].erase(cell); 
+            cell = set_A[set_A_ptr]->val;
+            set_A[set_A_ptr] = set_A[set_A_ptr]->next;
+            if(set_A[set_A_ptr] != nullptr)
+                set_A[set_A_ptr]->prev = nullptr; 
             size_A--;     
         }
         else if((set_A_ptr > set_B_ptr && size_A > min) || size_A >= max){
             // move from A to B
-            cell = *set_A[set_A_ptr].begin();
-            set_A[set_A_ptr].erase(cell); 
+            cell = set_A[set_A_ptr]->val;
+            set_A[set_A_ptr] = set_A[set_A_ptr]->next; 
+            if(set_A[set_A_ptr] != nullptr)
+                set_A[set_A_ptr]->prev = nullptr;
             size_A--;
         }
         else{
             // move from B to A
-            cell = *set_B[set_B_ptr].begin();
-            set_B[set_B_ptr].erase(cell);
+            cell = set_B[set_B_ptr]->val;
+            set_B[set_B_ptr] = set_B[set_B_ptr]->next;
+            if(set_B[set_B_ptr] != nullptr)
+                set_B[set_B_ptr]->prev = nullptr;
             size_A++;
         }
 
@@ -531,17 +572,50 @@ void Partitioner::update_gain(const int& in){
     // update bucket list
     for(const auto p : pre_gain){
         if(cell_gain[p.first] != p.second){
+            node *cur_cell = cell_ptr[p.first];
+            int prev_idx = p.second + P_MAX;
+            int new_idx = cell_gain[p.first] + P_MAX;
             if(cell_side[p.first]){
-                set_B[p.second + P_MAX].erase(p.first);
-                set_B[cell_gain[p.first] + P_MAX].insert(p.first);
-                if(set_B_ptr < cell_gain[p.first] + P_MAX)
-                    set_B_ptr = cell_gain[p.first] + P_MAX;
+                if(set_B[prev_idx] != cur_cell){ // erase from prev bucket
+                    cur_cell->prev->next = cur_cell->next;
+                    if(cur_cell->next)
+                        cur_cell->next->prev = cur_cell->prev;
+                }
+                else{
+                    set_B[prev_idx] = set_B[prev_idx]->next;
+                    if(set_B[prev_idx] != nullptr)
+                        set_B[prev_idx]->prev = nullptr;
+                }
+                // insert to new bucket
+                cur_cell->prev = nullptr;
+                cur_cell->next = set_B[new_idx];
+                if(set_B[new_idx] != nullptr)
+                    set_B[new_idx]->prev = cur_cell;
+                set_B[new_idx] = cur_cell;
+
+                if(set_B_ptr < new_idx)
+                    set_B_ptr = new_idx;
             }
             else{
-                set_A[p.second + P_MAX].erase(p.first);
-                set_A[cell_gain[p.first] + P_MAX].insert(p.first);
-                if(set_A_ptr < cell_gain[p.first] + P_MAX)
-                    set_A_ptr = cell_gain[p.first] + P_MAX;
+                if(set_A[prev_idx] != cur_cell){ // erase from prev bucket
+                    cur_cell->prev->next = cur_cell->next;
+                    if(cur_cell->next)
+                        cur_cell->next->prev = cur_cell->prev;
+                }
+                else{
+                    set_A[prev_idx] = set_A[prev_idx]->next;
+                    if(set_A[prev_idx] != nullptr)
+                        set_A[prev_idx]->prev = nullptr;
+                }
+                // insert to new bucket
+                cur_cell->prev = nullptr;
+                cur_cell->next = set_A[new_idx];
+                if(set_A[new_idx] != nullptr)
+                    set_A[new_idx]->prev = cur_cell;
+                set_A[new_idx] = cur_cell;
+
+                if(set_A_ptr < new_idx)
+                    set_A_ptr = new_idx;
             }
         }
     }
@@ -551,7 +625,7 @@ void Partitioner::output(char *file_name){
     ofstream fout(file_name);
     getCuts();
     fout << "Cutsize = " << cut << endl;
-    cout << "Cutsize = " << cut << endl;
+    // cout << "Cutsize = " << cut << endl;
     fout << "G1 " << size_A << endl;
     for(int i=0;i<cells;i++)
         if(!cell_side[i])

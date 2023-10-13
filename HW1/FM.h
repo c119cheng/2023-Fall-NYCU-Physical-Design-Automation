@@ -7,6 +7,11 @@
 #include <cmath>
 using namespace std;
 
+struct node{
+    int val;
+    node *prev, *next;
+};
+
 class Partitioner{
     private:
         double balance_factor;
@@ -15,6 +20,7 @@ class Partitioner{
         int P_MAX;
 
         vector<int> cell_name;
+        vector<node*> cell_ptr;
         vector<vector<int>> net_list; // net[i] connect cells
         vector<vector<int>> cell_list; // cell[i] connect nets
 
@@ -24,7 +30,7 @@ class Partitioner{
         int size_A, size_B;
         int set_A_ptr, set_B_ptr;
         int cut;
-        vector<unordered_set<int>> set_A, set_B;
+        vector<node*> set_A, set_B;
         vector<int> step_gain, step_move;
         vector<int> net_A_size, net_B_size;
 
