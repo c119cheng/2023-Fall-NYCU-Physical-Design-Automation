@@ -2,8 +2,8 @@
 CC = g++
 CFLAGS =  -std=c++11 -O3
 MAIN_FILE = main.o
-LINK_FILES = Placer.o
-EXE_FILE = Lab3
+LINK_FILES = Router.o
+EXE_FILE = Lab4
 
 CHECKCC = valgrind
 CHECKFLAGS = --leak-check=full -s --show-leak-kinds=all --track-origins=yes 
@@ -16,9 +16,12 @@ all: $(LINK_FILES) $(MAIN_FILE)
 	$(CC) $(CFLAGS) -c $<
 
 sample:
-	time ./$(EXE_FILE) sample.sp output.txt
-	./SolutionChecker sample.sp output.txt
-	python plot.py sample.sp output.txt output.png
+	time ./$(EXE_FILE) ./testcase/test5.in output.txt
+	./SolutionChecker ./testcase/test5.in output.txt
+
+test:
+	time ./$(EXE_FILE) ./testcase/test.in output.txt
+	./SolutionChecker ./testcase/test.in output.txt
 	
 DFF:
 	time ./$(EXE_FILE) testcase/ASYNC_DFFHx1_ASAP7_75t_R.sp output.txt

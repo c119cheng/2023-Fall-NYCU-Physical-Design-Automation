@@ -1,7 +1,7 @@
-#include "Placer.h"
+#include "Router.h"
 int main(int argc, char **argv){
-    Placer P(argv[1], argv[2]);
-    P.place();
-    P.output();
+    Router R(argv[1], argv[2]);
+    R.route();
+    R.output();
     return 0;
 }
